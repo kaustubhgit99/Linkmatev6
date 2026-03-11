@@ -1,0 +1,48 @@
+-- ============================================================
+-- Run this in your Supabase SQL Editor
+-- Adds the enquiries table for the Contact Owner form
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.enquiries (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id     UUID NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  owner_id    UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id   UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  sender_name TEXT NOT NULL,
+  sender_phone TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  is_read     BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Index for owner to fetch their enquiries quickly
+CREATE INDEX IF NOT EXISTS enquiries_owner_id_idx ON public.enquiries(owner_id);
+CREATE INDEX IF NOT EXISTS enquiries_room_id_idx  ON public.enquiries(room_id);
+
+-- Row Level Security
+ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY;
+
+-- Anyone (including anonymous) can insert an enquiry
+CREATE POLICY "Anyone can send enquiry"
+  ON public.enquiries FOR INSERT
+  WITH CHECK (true);
+
+-- Owners can read enquiries sent to them
+CREATE POLICY "Owner can read own enquiries"
+  ON public.enquiries FOR SELECT
+  USING (owner_id = auth.uid());
+
+-- Owners can mark enquiries as read
+CREATE POLICY "Owner can update own enquiries"
+  ON public.enquiries FOR UPDATE
+  USING (owner_id = auth.uid());
+
+-- Admins can see all
+CREATE POLICY "Admin full access to enquiries"
+  ON public.enquiries FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
